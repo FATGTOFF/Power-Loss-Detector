@@ -221,10 +221,9 @@ bool sendEmail(const bool shouldSendEmail)
 	  {
 		digitalWrite (ledPin[SafePinsToUse::GPIO::GPIO_27], HIGH);
 	  }	 
-
-      // Wait 60 minutes
-      // 10 minutes = 600,000 milliseconds      
-      vTaskDelay((600000 * 6) / portTICK_PERIOD_MS);
+	  
+	  // Wait 5 minutes
+      vTaskDelay(300000 / portTICK_PERIOD_MS);   // 300000 ms = 5 minutes
 
 	  switchStateOfLED = digitalRead(ledPin[UseWithCautionPins::GPIO::GPIO_02]);
     if(HIGH == switchStateOfLED)
@@ -310,6 +309,7 @@ void checkLEDs()
 		digitalWrite (ledPin[SafePinsToUse::GPIO::GPIO_33], LOW);
 	} 			
 }
+
 // Uncomment if different GPIO
 // will be used as UART.
 //HardwareSerial mySerial(2);
@@ -371,6 +371,7 @@ void loop()
 	bool readyToSendEmail{false};
 	static bool emailSent{false};
 
+	
 	if (static_cast<int>(HIGH) == switchStateOfLED)
 	{
 		digitalWrite(ledPin[UseWithCautionPins::GPIO::GPIO_02], static_cast<uint8_t>(LOW));
