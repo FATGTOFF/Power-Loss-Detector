@@ -22,9 +22,6 @@ constexpr uint8_t TXp2 {UseWithCautionPins::GPIO::GPIO_17};
 constexpr long  gmtOffset_sec = 3600; // Example: GMT +1 hour offset
 constexpr int   daylightOffset_sec = 3600; // Example: 1 hour daylight saving offset
 
-unsigned long lastEmailTime = 0;
-const unsigned long emailCooldownInMilliSecs = 300000; // 5 minutes
-
 WebServer server(80);
 
 String TempDataToPass{""};
@@ -113,54 +110,22 @@ int getCurrentMinute()
 
 bool sendEmail(const bool shouldSendEmail)
 {
-	// If caller says not to send, exit immediately
-  if (!shouldSendEmail) 
-	{
-      return false;
-  }
-
-  const unsigned long now = millis();
-
-  // Enforce 5‑minute cooldown
-  if (now - lastEmailTime < emailCooldownInMilliSecs) 
-	{
-      // Too soon — skip sending
-      return false;
-  }
-
   bool emailSent{false};
   int switchStateOfLED = ledPin[SafePinsToUse::GPIO::GPIO_25];
 #if (TURN_WIFI_ON == 1)
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-	const unsigned long wifiStartInMilliseconds = millis();
-
   while (WiFi.status() != WL_CONNECTED && shouldSendEmail) 
   {
-
-    // Blink LED
-    switchStateOfLED = digitalRead(ledPin[SafePinsToUse::GPIO::GPIO_25]);
-    digitalWrite(ledPin[SafePinsToUse::GPIO::GPIO_25],
-                  (switchStateOfLED == LOW) ? HIGH : LOW);
-
-    // Yield so ESP32 stays responsive
-    delay(10);
-
-    // Optional timeout (30 seconds)
-    if (millis() - wifiStartInMilliseconds > 30000)
+	switchStateOfLED = digitalRead(ledPin[SafePinsToUse::GPIO::GPIO_25]);
+    if(LOW == switchStateOfLED)
     {
-         Serial.println("WiFi connect timeout.");
-         return false;
+	  digitalWrite (ledPin[SafePinsToUse::GPIO::GPIO_25], HIGH);
     }
-	  //switchStateOfLED = digitalRead(ledPin[SafePinsToUse::GPIO::GPIO_25]);
-    //if(LOW == switchStateOfLED)
-    //{
-	  //digitalWrite (ledPin[SafePinsToUse::GPIO::GPIO_25], HIGH);
-    //}
-    //else
-    //{
-    //  digitalWrite (ledPin[SafePinsToUse::GPIO::GPIO_25], LOW);
-    //}
+    else
+    {
+      digitalWrite (ledPin[SafePinsToUse::GPIO::GPIO_25], LOW);
+    }
   }
 #endif
 
@@ -176,7 +141,7 @@ bool sendEmail(const bool shouldSendEmail)
   }
   else if (WiFi.status() == WL_CONNECTED)
   {
-	switchStateOfLED = digitalRead(ledPin[SafePinsToUse::GPIO::GPIO_25]);
+	switchStateOfLED = ledPin[SafePinsToUse::GPIO::GPIO_25];
     if(LOW == switchStateOfLED)
     {
       digitalWrite (ledPin[SafePinsToUse::GPIO::GPIO_25], HIGH);
@@ -202,7 +167,7 @@ bool sendEmail(const bool shouldSendEmail)
   //message.addRecipient("First Last", RECIPIENT_EMAIL_3);
   message.text.content = "I detected the loss of power in the basement. Check the circuit breaker #XX";
 
-  // Connect SMTP
+  // Send the email
   if (!smtp.connect(&config) && shouldSendEmail) 
   {
       Serial.println("SMTP connection failed: " + smtp.errorReason());
@@ -215,7 +180,6 @@ bool sendEmail(const bool shouldSendEmail)
       return emailSent;
   }
 
-  // Send the email
   if (!MailClient.sendMail(&smtp, &message)) 
   {
       Serial.println("Error sending email: " + smtp.errorReason());
@@ -233,24 +197,45 @@ bool sendEmail(const bool shouldSendEmail)
   {
       Serial.println("Email sent successfully!");
       emailSent = true;
-
-    // Reset LEDs
-    if (digitalRead(ledPin[SafePinsToUse::GPIO::GPIO_25]) == HIGH)
-        digitalWrite(ledPin[SafePinsToUse::GPIO::GPIO_25], LOW);
-
-    if (digitalRead(ledPin[SafePinsToUse::GPIO::GPIO_26]) == HIGH)
-        digitalWrite(ledPin[SafePinsToUse::GPIO::GPIO_26], LOW);
-
-    if (digitalRead(ledPin[SafePinsToUse::GPIO::GPIO_33]) == HIGH)
-        digitalWrite(ledPin[SafePinsToUse::GPIO::GPIO_33], LOW);
-
-    if (digitalRead(ledPin[SafePinsToUse::GPIO::GPIO_27]) == LOW)
-        digitalWrite(ledPin[SafePinsToUse::GPIO::GPIO_27], HIGH);
-  }
-
-  if (emailSent) 
+	  
+	switchStateOfLED = digitalRead(ledPin[SafePinsToUse::GPIO::GPIO_25]);
+	if(HIGH == switchStateOfLED)
 	{
-      lastEmailTime = now;   // <-- record the time
+	digitalWrite (ledPin[SafePinsToUse::GPIO::GPIO_25], LOW);
+	}
+
+	switchStateOfLED = digitalRead(ledPin[SafePinsToUse::GPIO::GPIO_26]);
+	if(HIGH == switchStateOfLED)
+	{
+	digitalWrite (ledPin[SafePinsToUse::GPIO::GPIO_26], LOW);
+	}	  	
+	  
+	switchStateOfLED = digitalRead(ledPin[SafePinsToUse::GPIO::GPIO_33]);
+	if(HIGH == switchStateOfLED)
+	{
+	digitalWrite (ledPin[SafePinsToUse::GPIO::GPIO_33], LOW);
+	}	  		  
+	  
+	  switchStateOfLED = digitalRead(ledPin[SafePinsToUse::GPIO::GPIO_27]);
+      if(LOW == switchStateOfLED)
+	  {
+		digitalWrite (ledPin[SafePinsToUse::GPIO::GPIO_27], HIGH);
+	  }	 
+	  
+	  // Wait 5 minutes
+      vTaskDelay(300000 / portTICK_PERIOD_MS);   // 300000 ms = 5 minutes
+
+	  switchStateOfLED = digitalRead(ledPin[UseWithCautionPins::GPIO::GPIO_02]);
+    if(HIGH == switchStateOfLED)
+	  {
+		digitalWrite (ledPin[UseWithCautionPins::GPIO::GPIO_02], HIGH);
+	  }
+	  
+	  switchStateOfLED = digitalRead(ledPin[SafePinsToUse::GPIO::GPIO_27]);
+    if(HIGH == switchStateOfLED)
+	  {
+		digitalWrite (ledPin[SafePinsToUse::GPIO::GPIO_27], LOW);
+	  }	  	  
   }
 
   return emailSent;
@@ -324,6 +309,7 @@ void checkLEDs()
 		digitalWrite (ledPin[SafePinsToUse::GPIO::GPIO_33], LOW);
 	} 			
 }
+
 // Uncomment if different GPIO
 // will be used as UART.
 //HardwareSerial mySerial(2);
@@ -385,6 +371,7 @@ void loop()
 	bool readyToSendEmail{false};
 	static bool emailSent{false};
 
+	
 	if (static_cast<int>(HIGH) == switchStateOfLED)
 	{
 		digitalWrite(ledPin[UseWithCautionPins::GPIO::GPIO_02], static_cast<uint8_t>(LOW));
